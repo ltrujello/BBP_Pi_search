@@ -68,7 +68,7 @@ def brute_rational_search(n_runs, delta, n_comparisons):
     scaled_bbp_vals = p_over_q("120*k^2 + 151*k + 47", "512*k^4 + 1024*k^3 + 712*k^2 + 194*k + 15", n_comparisons, 10/16)
     p = "{A}*k^2 + {B}*k + {C}"
     q = "{D}*k^5 + {E}*k^4 + {F}*k^3 + {G}*k^2 + {H}*k + {I}" 
-    # Initial conditions
+    # Initial conditions. I found these just by looking at a graph. 
     a = 22
     b = 151
     c = 47
@@ -80,14 +80,15 @@ def brute_rational_search(n_runs, delta, n_comparisons):
     i = 15
     
     params = {"A" : a, "B": b, "C" : c, "D" : d, "E" : e, "F" : f, "G" : g, "H" : h, "I" : i}
+    numer_func = p.format(**params)
+    denom_func = q.format(**params)
 
     run = 0
     while True:    
-        numer_func = p.format(**params)
-        denom_func = q.format(**params)
         vals = p_over_q(numer_func, denom_func, n_comparisons, 1)
         diffs = list( map(lambda x,y : abs(x - y), scaled_bbp_vals, vals) )
-        print(run)
+        if run % 100 == 0:
+            print(run//n_runs * 100, "percent ...")
         for param_key in params:
             params[param_key] += delta
             plus_numer = p.format(**params)
@@ -115,10 +116,12 @@ def brute_rational_search(n_runs, delta, n_comparisons):
                 else:
                     # then plus error was good, so return parameter to one delta above its original value.
                     params[param_key] += 2*delta 
+            # we loop, and update our polynomials
             numer_func = p.format(**params)
             denom_func = q.format(**params)
         if run == n_runs:
-            print(numer_func.replace("*", "").replace("k","x")+"\n", denom_func.replace("*", "").replace("k","x"))
+            print("Numerator:  ", numer_func.replace("*", "").replace("k","x")+"\n"\
+                  "Denominator:", denom_func.replace("*", "").replace("k","x"))
             break
         run += 1
 

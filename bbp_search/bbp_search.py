@@ -1,3 +1,5 @@
+import numpy as np
+from scipy.optimize import curve_fit
 '''
 We look for a BBP base 10 series for pi. A desired formula is of the form 
 pi \sum_{k = 0}(1/10)^k * p(k)/q(k)
@@ -25,7 +27,7 @@ def series(terms, n_terms):
         sum += terms[i]
     return sum
 
-def p_over_q(p,q, n_terms, coeff = 1):
+def p_over_q_vals(p,q, n_terms, coeff = 1):
     '''
     Computes the individual terms of a series with rational function p(k)/q(k) with 
     coefficient coeff.
@@ -130,6 +132,30 @@ def brute_rational_search(n_runs, delta, n_comparisons):
             return prev_diffs
         run += 1
 
+'''
+Let's try to instead use gradient descent.
+'''
+
+def p_over_q(x, c_1, c_2, c_3, b_1, b_2, b_3, b_4, b_5, b_6):
+    '''
+    p(x) = c_1x^2 + c_2x + c_3
+    q(x) = b_1x^5 + b_2x^4 + b_3x^3 + b_4x^2 + b_5x + b_6
+    '''
+    return (c_1*x**2 + c_2*x + c_3)/(b_1*x**5 + b_2*x**4 + b_3*x**3 + b_4*x**2 + b_5*x + b_6)
+
+def approx_BBP_rational(n_terms):
+    k_indices = np.linspace(0, n_terms, n_terms+1)
+    scaled_bbp_vals = np.array(p_over_q_vals("120*k^2 + 151*k + 47", "512*k^4 + 1024*k^3 + 712*k^2 + 194*k + 15", n_terms, 10/16))
+    params, cov = curve_fit(p_over_q, k_indices, scaled_bbp_vals, p0=[22,151,47,80,600,1000,800,200,15], method = "lm")
+    params = {"A" : params[0], "B": params[1], "C": params[2], "D" : params[3], "E" : params[4], "F" : params[5], "G" : params[6], "H" : params[7], "I" : params[8]}
+    p = "{A}*k^2 + {B}*k + {C}"
+    q = "{D}*k^5 + {E}*k^4 + {F}*k^3 + {G}*k^2 + {H}*k^1 + {I}" 
+    numer_func = p.format(**params)
+    denom_func = q.format(**params)
+    print("Numerator:  ", numer_func.replace("*", "").replace("k","x")+"\n"\
+          "Denominator:", denom_func.replace("*", "").replace("k","x")+"\n")
+ 
+
 # Pretty close rational functions:
 # 1)  6.900000000000155x^2 + 164.29999999999924x + 47.0 
 #     / 95.09999999999914x^5 + 600.3000000000001x^4 + 986.4999999999969x^3 + 800.3000000000001x^2 + 200.29999999999998x + 15.0
@@ -152,6 +178,7 @@ def brute_rational_search(n_runs, delta, n_comparisons):
 #     89.60799999999468x^5 + 600.7760000000665x^4 + 1000.7760000000665x^3 + 792.0560000000868x^2 + 200.79200000001663x + 14.999999999998854
 #10)  3.35000000000007x^2 + 167.95000000000616x + 47.09999999999776
 #     96.74999999999905x^5 + 600.7499999999717x^4 + 995.2499999999704x^3 + 800.8499999999717x^2 + 190.55000000000766x^1 + 15.000000000000774  
+
 
 def full_rational_search(): 
     '''

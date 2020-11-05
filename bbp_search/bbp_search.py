@@ -4,7 +4,8 @@ pi \sum_{k = 0}(1/10)^k * p(k)/q(k)
 where p, q are polynomials in k with integer coefficients. 
 This might not even exist. Borwein et al showed that a class of series, which can be rewritten 
 in BBP form, cannot express pi with base 10. Thus, if it exists, it needs to be something 
-else, although they are a bit vague in their papers on this. 
+else, although they are a bit vague in their papers on this. Nevertheless, this 
+aims to find such an expression for pi.
 
 Part of this problem boils down to interpolating data with rational functions. 
 Such interpolation is hard, and unforunately not much progess has 
@@ -67,8 +68,8 @@ def brute_rational_search(n_runs, delta, n_comparisons):
     '''
     scaled_bbp_vals = p_over_q("120*k^2 + 151*k + 47", "512*k^4 + 1024*k^3 + 712*k^2 + 194*k + 15", n_comparisons, 10/16)
     p = "{A}*k^2 + {B}*k + {C}"
-    q = "{D}*k^5 + {E}*k^4 + {F}*k^3 + {G}*k^2 + {H}*k + {I}" 
-    # Initial conditions. I found these just by looking at a graph. 
+    q = "{D}*k^5 + {E}*k^4 + {F}*k^3 + {G}*k^2 + {H}*k^1 + {I}" 
+    #### Initial conditions #####
     a = 22
     b = 151
     c = 47
@@ -79,50 +80,54 @@ def brute_rational_search(n_runs, delta, n_comparisons):
     h = 200
     i = 15
     
-    params = {"A" : a, "B": b, "C" : c, "D" : d, "E" : e, "F" : f, "G" : g, "H" : h, "I" : i}
+    params = {"A" : a, "B": b, "C":c, "D" : d, "E" : e, "F" : f, "G" : g, "H" : h, "I" : i}
     numer_func = p.format(**params)
     denom_func = q.format(**params)
+    vals = p_over_q(numer_func, denom_func, n_comparisons, 1)
+    prev_diffs = list( map(lambda x,y : abs(x - y), scaled_bbp_vals, vals) )
+    ############################
 
     run = 0
     while True:    
-        vals = p_over_q(numer_func, denom_func, n_comparisons, 1)
-        diffs = list( map(lambda x,y : abs(x - y), scaled_bbp_vals, vals) )
-        if run % 100 == 0:
-            print(run//n_runs * 100, "percent ...")
-        for param_key in params:
-            params[param_key] += delta
+        if run % (n_runs/10) == 0:
+            print(round(run/n_runs,2) * 100, "percent ...")
+        for coeff in params:
+            params[coeff] += delta
             plus_numer = p.format(**params)
             plus_denom = q.format(**params)
             plus_vals = p_over_q(plus_numer, plus_denom, n_comparisons, 1)
             plus_diffs = list(map(lambda x,y : abs(x - y), scaled_bbp_vals, plus_vals))
             plus_error = sum(plus_diffs)
 
-            params[param_key] -= 2*delta # we do 2* to offset the added delta from the above step 
+            params[coeff] -= 2*delta # we do 2* to offset the added delta from the above step 
             sub_numer = p.format(**params)
             sub_denom = q.format(**params)
             sub_vals = p_over_q(sub_numer, sub_denom, n_comparisons, 1)
             sub_diffs = list(map(lambda x,y : abs(x - y), scaled_bbp_vals, sub_vals))
             sub_error = sum(sub_diffs)
             ''' 
-            (1) At this point, params[param_key] is a delta less than its original value. 
+            (1) At this point, params[coeff] is a delta less than its original value. 
             '''
             if sub_error <= plus_error: # then sub_error gets us closer
-                if not sub_error <= sum(diffs): # if it is worse
-                    params[param_key] += delta  # return parameter to its original value
-                # otherwise, sub_error was good, so do noting. See (1).
+                if not sub_error <= sum(prev_diffs): # if it is worse
+                    params[coeff] += delta  # return parameter to its original value
+                else:
+                    prev_diffs = sub_diffs
             else: # then plus_error gets us closer
-                if not plus_error <= sum(diffs): #if it is wosse
-                    params[param_key] += delta 
+                if not plus_error <= sum(prev_diffs): #if it is wosse
+                    params[coeff] += delta 
                 else:
                     # then plus error was good, so return parameter to one delta above its original value.
-                    params[param_key] += 2*delta 
+                    params[coeff] += 2*delta 
+                    prev_diffs = plus_diffs
             # we loop, and update our polynomials
             numer_func = p.format(**params)
             denom_func = q.format(**params)
         if run == n_runs:
             print("Numerator:  ", numer_func.replace("*", "").replace("k","x")+"\n"\
-                  "Denominator:", denom_func.replace("*", "").replace("k","x"))
-            break
+                  "Denominator:", denom_func.replace("*", "").replace("k","x")+"\n"\
+                  "Total error:", sum(prev_diffs))
+            return prev_diffs
         run += 1
 
 # Pretty close rational functions:
@@ -130,7 +135,23 @@ def brute_rational_search(n_runs, delta, n_comparisons):
 #     / 95.09999999999914x^5 + 600.3000000000001x^4 + 986.4999999999969x^3 + 800.3000000000001x^2 + 200.29999999999998x + 15.0
 # 2)  4.829999999998592x^2 + 166.5099999999859x + 47.00000000007106
 #     113.60999999992283x^5 + 567.2550000000298x^4 + 1001.6399999999985x^3 + 800.8349999999992x^2 + 200.83499999999924x + 15.000000000017765
-
+# 3) 16.94999999999993x^2 + 154.35000000000124x + 46.99999999999928
+#    85.04999999999971x^5 + 600.6499999999944x^4 + 996.5499999999935x^3 + 800.7499999999944x^2 + 200.6500000000014x + 15.00000000000018    
+# Really close!:
+# 4)  11.950000000000001x^2 + 159.35000000000238x + 46.99999999999882
+#     90.04999999999943x^5 + 600.6499999999887x^4 + 995.0499999999874x^3 + 800.7499999999887x^2 + 197.15000000000302x + 15.000000000000357    
+# 5)  6.950000000000091x^2 + 164.35000000000352x + 46.999999999998465
+#     95.04999999999914x^5 + 600.649999999983x^4 + 995.0499999999818x^3 + 800.7499999999831x^2 + 192.15000000000472x + 15.000000000000535
+# 6)  9.474999999999394x^2 + 161.87500000000247x + 46.975
+#     92.52500000000285x^5 + 599.7750000000002x^4 + 1000.7249999999993x^3 + 800.7749999999993x^2 + 190.17499999999777x + 14.975 
+# 7)  6.974999999999395x^2 + 164.37500000000304x + 46.975
+#     95.02500000000342x^5 + 599.7750000000002x^4 + 1000.7249999999993x^3 + 800.7749999999993x^2 + 187.6749999999972x + 14.975
+# 8)  5.374999999999445x^2 + 165.9750000000034x + 46.975
+#     96.57500000000404x^5 + 599.7750000000002x^4 + 1000.7249999999993x^3 + 800.7749999999993x^2 + 186.12499999999685x + 14.975
+# 9)  12.392000000000259x^2 + 158.94400000001266x + 46.984000000004414
+#     89.60799999999468x^5 + 600.7760000000665x^4 + 1000.7760000000665x^3 + 792.0560000000868x^2 + 200.79200000001663x + 14.999999999998854
+#10)  3.35000000000007x^2 + 167.95000000000616x + 47.09999999999776
+#     96.74999999999905x^5 + 600.7499999999717x^4 + 995.2499999999704x^3 + 800.8499999999717x^2 + 190.55000000000766x^1 + 15.000000000000774  
 
 def full_rational_search(): 
     '''

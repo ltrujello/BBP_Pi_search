@@ -221,9 +221,11 @@ def p_over_q_at_x(x, *params):
     q_expr = q_expr.replace("^", "**")
     return eval(p_expr)/eval(q_expr)
 
-def grad_descent_BBP_rational(n_terms, num_deg, den_deg, guess, 
+sentinel = object() # dummy val
+def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
                               func_to_fit_num = "120*x^2 + 151*x + 47", 
-                              func_to_fit_den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15"):
+                              func_to_fit_den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15",
+                              guess = sentinel):
     '''
     Let n = num_deg, m = den_deg. This function attempts to model a rational 
     function p(x)/q(x) with 
@@ -237,6 +239,8 @@ def grad_descent_BBP_rational(n_terms, num_deg, den_deg, guess,
     guess   : our guess of what the coefficients should be (can just use a graph).
     '''
     #p0 = [22,151,150, 47,80,600,1000,800,200,100,15] a very good guess when n = 2, m = 5.
+    if guess is sentinel:
+        guess = [1]*(num_deg + den_deg + 2)
     global degs 
     degs = [num_deg, den_deg]
     # set up x, y data
@@ -250,7 +254,25 @@ def grad_descent_BBP_rational(n_terms, num_deg, den_deg, guess,
     error = list(map(lambda x,y : abs(x - y), func_vals, approxed_vals))
     print("Numerator:  ", p.replace("*", "")+"\n"\
           "Denominator:", q.replace("*", "")+"\n") # for readability
-    return sum(error)
+    return p.replace("*", ""), q.replace("*", ""), sum(error)
+
+def search_and_compare():
+    exp_fits = []
+    exp_degree = [ [0,5], [1,5], [1,6], [2,6], [2, 7], [3,8], [3,9] ]
+    bbp_fits = []
+    bbp_degree = [ [1,4], [2,4], [3,5], [3,6], [4, 6], [4,7], [5,8], [5,9] ]
+
+    for degree in exp_degree:
+        p, q, error = grad_descent_BBP_rational(100000, degree[0], degree[1],\
+                                                func_to_fit_num = "(0.625)^x", \
+                                                func_to_fit_den = "1")
+        data = [p, q, error]
+        exp_fits.append(data)
+    for degree in bbp_degree:
+        p, q, error = grad_descent_BBP_rational(100000, degree[0], degree[1])
+        data = [p, q, error]
+        bbp.append(data)
+    return exp_fits, bbp_fits
 '''
 Sci_py gradient descent is very efficient, but lacks precision past ~12 decimal points. 
 It is difficult to control precision in python since python was not made to do so. It is also 
@@ -275,6 +297,7 @@ def grad_descent_for_coeffs(n_comparisons):
     print(A.shape,B.shape)
     return A,B, bbp_vals
     # return A,B, np.linalg.solve(A,B)
+
 
 
 # By testing, the summands cannot by of the form

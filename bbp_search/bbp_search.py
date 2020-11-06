@@ -253,7 +253,8 @@ def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
     approxed_vals = p_over_q_vals(p, q, n_terms)
     error = list(map(lambda x,y : abs(x - y), func_vals, approxed_vals))
     print("Numerator:  ", p.replace("*", "")+"\n"\
-          "Denominator:", q.replace("*", "")+"\n") # for readability
+          "Denominator:", q.replace("*", "")+"\n"\
+          "Error:      ", sum(error)) # for readability
     return p.replace("*", ""), q.replace("*", ""), sum(error)
 
 def search_and_compare():
@@ -263,15 +264,21 @@ def search_and_compare():
     bbp_degree = [ [1,4], [2,4], [3,5], [3,6], [4, 6], [4,7], [5,8], [5,9] ]
 
     for degree in exp_degree:
-        p, q, error = grad_descent_BBP_rational(100000, degree[0], degree[1],\
-                                                func_to_fit_num = "(0.625)^x", \
-                                                func_to_fit_den = "1")
+        try:
+            p, q, error = grad_descent_BBP_rational(100000, degree[0], degree[1],\
+                                                    func_to_fit_num = "(0.625)^x", \
+                                                    func_to_fit_den = "1")
+        except:
+            pass
         data = [p, q, error]
         exp_fits.append(data)
     for degree in bbp_degree:
-        p, q, error = grad_descent_BBP_rational(100000, degree[0], degree[1])
-        data = [p, q, error]
-        bbp.append(data)
+        try:
+            p, q, error = grad_descent_BBP_rational(100000, degree[0], degree[1])
+            data = [p, q, error]
+            bbp.append(data)
+        except: 
+            pass
     return exp_fits, bbp_fits
 '''
 Sci_py gradient descent is very efficient, but lacks precision past ~12 decimal points. 

@@ -247,7 +247,7 @@ def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
     k_indices = np.linspace(0, n_terms, n_terms+1)
     func_vals = np.array(p_over_q_vals(func_to_fit_num, func_to_fit_den, n_terms))
 
-    params, cov = curve_fit(p_over_q_at_x, k_indices, func_vals, p0=guess) # gradient descent
+    params, cov = curve_fit(p_over_q_at_x, k_indices, func_vals, p0=guess, maxfev=5000) # gradient descent
     p, q = p_over_q_expr(num_deg, den_deg, list(params), nopars = True) # obtain the expr for the new approximation
 
     approxed_vals = p_over_q_vals(p, q, n_terms)
@@ -259,27 +259,30 @@ def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
 
 def search_and_compare():
     exp_fits = []
-    exp_degree = [ [0,5], [1,5], [1,6], [2,6], [2, 7], [3,8], [3,9] ]
     bbp_fits = []
-    bbp_degree = [ [1,4], [2,4], [3,5], [3,6], [4, 6], [4,7], [5,8], [5,9] ]
+    best_approxs = []
 
-    for degree in exp_degree:
-        try:
-            p, q, error = grad_descent_BBP_rational(100000, degree[0], degree[1],\
-                                                    func_to_fit_num = "(0.625)^x", \
-                                                    func_to_fit_den = "1")
-        except:
-            pass
-        data = [p, q, error]
-        exp_fits.append(data)
-    for degree in bbp_degree:
-        try:
-            p, q, error = grad_descent_BBP_rational(100000, degree[0], degree[1])
-            data = [p, q, error]
-            bbp.append(data)
-        except: 
-            pass
-    return exp_fits, bbp_fits
+    for num_deg in range(1, 7):
+        for den_deg in range(1, 10):
+            try:
+                p, q, error = grad_descent_BBP_rational(100000, num_deg, den_deg,\
+                                                        func_to_fit_num = "(0.625)^x", \
+                                                        func_to_fit_den = "1")
+                data = [p, q, error]
+                if error < 1e-5:
+                    best_approxs.append(data)
+                exp_fits.append(data)
+            except:
+                pass
+            try:
+                p, q, error = grad_descent_BBP_rational(100000, num_deg, den_deg)
+                data = [p, q, error]
+                if error < 1e-5:
+                    best_approxs.append(data)
+                bbp_fits.append(data)
+            except: 
+                pass
+        return exp_fits, bbp_fits
 '''
 Sci_py gradient descent is very efficient, but lacks precision past ~12 decimal points. 
 It is difficult to control precision in python since python was not made to do so. It is also 

@@ -221,11 +221,12 @@ def p_over_q_at_x(x, *params):
     q_expr = q_expr.replace("^", "**")
     return eval(p_expr)/eval(q_expr)
 
-sentinel = object() # dummy val
+sentinel = object() # dummy object
 def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
-                              func_to_fit_num = "120*x^2 + 151*x + 47", 
+                              func_to_fit_num = "(0.625)^(x)*(120*x^2 + 151*x + 47)", 
                               func_to_fit_den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15",
-                              guess = sentinel):
+                              guess = sentinel,
+                              output_params=False):
     '''
     Let n = num_deg, m = den_deg. This function attempts to model a rational 
     function p(x)/q(x) with 
@@ -252,37 +253,81 @@ def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
 
     approxed_vals = p_over_q_vals(p, q, n_terms)
     error = list(map(lambda x,y : abs(x - y), func_vals, approxed_vals))
-    print("Numerator:  ", p.replace("*", "")+"\n"\
+    total_error = sum(error)
+    print("For func :  ", func_to_fit_num + "\n",
+          "Numerator:  ", p.replace("*", "")+"\n"\
           "Denominator:", q.replace("*", "")+"\n"\
-          "Error:      ", sum(error)) # for readability
-    return p.replace("*", ""), q.replace("*", ""), sum(error)
+          "Error:      ", total_error, "\n") # for readability
+    if output_params:
+        return params, total_error
+    else:
+        return p.replace("*", ""), q.replace("*", ""), total_error
 
 def search_and_compare():
     exp_fits = []
     bbp_fits = []
     best_approxs = []
 
-    for num_deg in range(1, 7):
-        for den_deg in range(1, 10):
+    for num_deg in range(1, 8):
+        for den_deg in range(10, 11):
+            print(num_deg, den_deg)
             try:
-                p, q, error = grad_descent_BBP_rational(100000, num_deg, den_deg,\
+                p, q, error = gradient_recursion(100000, num_deg, den_deg,\
                                                         func_to_fit_num = "(0.625)^x", \
                                                         func_to_fit_den = "1")
                 data = [p, q, error]
-                if error < 1e-5:
+                if error < 1e-7:
                     best_approxs.append(data)
                 exp_fits.append(data)
             except:
                 pass
             try:
-                p, q, error = grad_descent_BBP_rational(100000, num_deg, den_deg)
+                p, q, error = gradient_recursion(100000, num_deg, den_deg)
                 data = [p, q, error]
-                if error < 1e-5:
+                if error < 1e-7:
                     best_approxs.append(data)
                 bbp_fits.append(data)
             except: 
                 pass
-        return exp_fits, bbp_fits
+    return exp_fits, bbp_fits, best_approxs
+
+# '5367124765888.0x^4 + -530171538689464.0x^3 + 1.7412531032379454e+16x^2 + -1.924913929564134e+17x^1 + 8871917683451926.0
+# -13176492198746.0x^9 + 229588042882762.0x^8 + -4126924029947049.0x^7 + 18717880079013420x^6 + -184346450804085088x^5 + 663253966578081.0x^4 + -1637793963428539904x^3 + -26477463167523488x^2 + -230866126471856896x^1 + 2831463090463394.0
+
+# p = [10734249531776, -1060343077378928, 34825062064758908, -384982785912826816, 17743835366903852]
+# q = [-26352984397492, 459176085765524, -8253848059894098, 37435760158026840, -368692901608170176, 1326507933156162, -3275587926857079808, -52954926335046976, -461732252943713792, 5662926180926788]
+# "0.0010734249531776873*x^4 + -0.10603430773789276*x^3 + 3.482506206475891*x^2 + -38.498278591282684*x^1 + 1.7743835366903853"
+# "-0.002635298439749254*x^9 + 0.04591760857655244*x^8 + -0.8253848059894098*x^7 + 3.743576015802684*x^6 + -36.869290160817016*x^5 + 0.13265079331561627*x^4 + -327.558792685708*x^3 + -5.295492633504698*x^2 + -46.17322529437138*x^1 + 0.5662926180926788"
+# "0.0012544894281814108*x^5 + -0.1180229478194571*x^4 + 3.7208845645745106*x^3 + -39.617001666980315*x^2 + -1.7661414102809467*x^1 + 1.6540985067121214"
+# "-0.0021822819261304856*x^10 + 0.032424363138435705*x^9 + -0.624593501436639*x^8 + 2.01486859075354*x^7 + -28.267048159977428*x^6 + -32.6610635031047*x^5 + -279.16296146201023*x^4 + -101.22005231035284*x^3 + 1.2780562045517494*x^2 + -8.501259828766722*x^1 + 0.527903778737912"
+'''
+Here's an idea. What if we fit the function for the first ~50 BBP or (10/16)^x points, then 
+use those coeffs for fitting ~100, and so on? 
+'''
+
+def gradient_recursion(n_iters, num_deg, den_deg,
+                       num = "(0.625)^(x)*(120*x^2 + 151*x + 47)", 
+                       den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15"):
+    try_guess = [1]*(num_deg + den_deg + 2)
+    iters = 100
+    while iters < n_iters:
+        print("Iteration: ", iters)
+        params, error = grad_descent_BBP_rational(iters,\
+                                            num_deg, den_deg,\
+                                            func_to_fit_num = num,\
+                                            func_to_fit_den = den,\
+                                            guess = try_guess,\
+                                            output_params = True)
+        try_guess = params
+        if iters < 2000:
+            iters += 200
+        else:
+            iters += 10000
+    p, q = p_over_q_expr(num_deg, den_deg, list(try_guess), nopars = True) # obtain the expr for the new approximation
+    return p.replace("*", ""), q.replace("*", ""), error
+
+
+
 '''
 Sci_py gradient descent is very efficient, but lacks precision past ~12 decimal points. 
 It is difficult to control precision in python since python was not made to do so. It is also 
@@ -307,35 +352,3 @@ def grad_descent_for_coeffs(n_comparisons):
     print(A.shape,B.shape)
     return A,B, bbp_vals
     # return A,B, np.linalg.solve(A,B)
-
-
-
-# By testing, the summands cannot by of the form
-# p(x) = c_1x^2 + c_2x + c_3
-# q(x) = b_1x^6 + b_2x^5 + b_3x^4 + b_4x^3 + b_5x^2 + b_6x + b_7
-
-# Pretty close rational functions:
-# 1)  6.900000000000155x^2 + 164.29999999999924x + 47.0 
-#     / 95.09999999999914x^5 + 600.3000000000001x^4 + 986.4999999999969x^3 + 800.3000000000001x^2 + 200.29999999999998x + 15.0
-# 2)  4.829999999998592x^2 + 166.5099999999859x + 47.00000000007106
-#     113.60999999992283x^5 + 567.2550000000298x^4 + 1001.6399999999985x^3 + 800.8349999999992x^2 + 200.83499999999924x + 15.000000000017765
-# 3) 16.94999999999993x^2 + 154.35000000000124x + 46.99999999999928
-#    85.04999999999971x^5 + 600.6499999999944x^4 + 996.5499999999935x^3 + 800.7499999999944x^2 + 200.6500000000014x + 15.00000000000018    
-# Really close!:
-# 4)  11.950000000000001x^2 + 159.35000000000238x + 46.99999999999882
-#     90.04999999999943x^5 + 600.6499999999887x^4 + 995.0499999999874x^3 + 800.7499999999887x^2 + 197.15000000000302x + 15.000000000000357    
-# 5)  6.950000000000091x^2 + 164.35000000000352x + 46.999999999998465
-#     95.04999999999914x^5 + 600.649999999983x^4 + 995.0499999999818x^3 + 800.7499999999831x^2 + 192.15000000000472x + 15.000000000000535
-# 6)  9.474999999999394x^2 + 161.87500000000247x + 46.975
-#     92.52500000000285x^5 + 599.7750000000002x^4 + 1000.7249999999993x^3 + 800.7749999999993x^2 + 190.17499999999777x + 14.975 
-# 7)  6.974999999999395x^2 + 164.37500000000304x + 46.975
-#     95.02500000000342x^5 + 599.7750000000002x^4 + 1000.7249999999993x^3 + 800.7749999999993x^2 + 187.6749999999972x + 14.975
-# 8)  5.374999999999445x^2 + 165.9750000000034x + 46.975
-#     96.57500000000404x^5 + 599.7750000000002x^4 + 1000.7249999999993x^3 + 800.7749999999993x^2 + 186.12499999999685x + 14.975
-# 9)  12.392000000000259x^2 + 158.94400000001266x + 46.984000000004414
-#     89.60799999999468x^5 + 600.7760000000665x^4 + 1000.7760000000665x^3 + 792.0560000000868x^2 + 200.79200000001663x + 14.999999999998854
-#10)  3.35000000000007x^2 + 167.95000000000616x + 47.09999999999776
-#     96.74999999999905x^5 + 600.7499999999717x^4 + 995.2499999999704x^3 + 800.8499999999717x^2 + 190.55000000000766x^1 + 15.000000000000774  
-# Insanely close:
-#11) 0.7912612958548907x^2 + -33.37646326882975x + 358.73514782417425
-#    3.381859148699356x^6 + -10.207350235822211x^5 + 224.43086733262686x^4 + 393.2003226706365x^3 + 2270.931165159218x^2 + 1035.7249781717808x + 114.48994079522934

@@ -1,5 +1,8 @@
 import numpy as np
+import math
 from scipy.optimize import curve_fit
+from decimal import *
+getcontext().prec = 40
 '''
 We look for a BBP base 10 series for pi. A desired formula is of the form 
 pi \sum_{k = 0}(1/10)^k * p(k)/q(k)
@@ -27,7 +30,7 @@ def series(terms, n_terms):
         sum += terms[i]
     return sum
 
-def p_over_q_vals(p,q, n_terms, coeff = 1):
+def p_over_q_vals(p, q, n_terms, coeff = 1, scale = 1):
     '''
     Computes the individual terms of a series with rational function p(k)/q(k) with 
     coefficient coeff.
@@ -36,10 +39,9 @@ def p_over_q_vals(p,q, n_terms, coeff = 1):
     p = p.replace("^", "**") #** is annoying to write for exponentiation
     q = q.replace("^", "**")
     for term in range(0, n_terms+1):
-        val_p = p.replace("k","(" +  str(term) + ")")
-        val_q = q.replace("k","(" +  str(term) + ")")
-        # print(coeff**term)
-        val = ((coeff)**term) * (eval(val_p)/eval(val_q))
+        val_p = p.replace("x","(" +  str(term) + ")")
+        val_q = q.replace("x","(" +  str(term) + ")")
+        val = scale * ((coeff)**term) * (eval(val_p)/eval(val_q))
         vals.append(val)
     return vals
 
@@ -48,8 +50,8 @@ def bbp_rationals():
     We compute the terms of the series given by the rationals in the BBP formula for pi.
     '''
     rationals = []
-    numer_val = p_over_q("120*k^2 + 151*k + 47", "1", 50, 5)
-    denom_val = p_over_q("512*k^4 + 1024*k^3 + 712*k^2 + 194*k + 15", "1", 50, 1)
+    numer_val = p_over_q_vals("120*x^2 + 151*x + 47", "1", 50, 5)
+    denom_val = p_over_q_vals("512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15", "1", 50, 1)
     for i in range(0, len(numer_val)):
         rationals += [(numer_val[i], denom_val[i])]
     return rationals
@@ -59,18 +61,25 @@ def rational_series(p,q, n_terms, coeff = 1):
     '''
     To compute the total sum with terms (coeff)^k*p(k)/q(k)
     '''
-    series_vals = p_over_q(p, q, n_terms, coeff)
-    return series(series_vals, n_terms, coeff)
+    series_vals = p_over_q_vals(p, q, n_terms, coeff)
+    return series(series_vals, n_terms)
 
 def brute_rational_search(n_runs, delta, n_comparisons):
     '''
-    This is rational function interpolation. I have an idea on what the 
-    form of my rational functions should be, so I am interpolating it to fit 
-    the data I need to find my series for pi. 
+    This is inefficient gradient descent, minimizing sum of errors. 
+    I don't want to use least squares because my data is very, very small.
+
+    We cycle through our parameters over and over again, tweaking them 
+    slightly to minimize error.
+
+    PARAMETERS:
+    n_runs : number of times we cycle to tweak parameters
+    delta  : amount we change each coefficient during each step of tweaking 
+    n_comparisons : number of BBP data points we try to fit with our  function.
     '''
-    scaled_bbp_vals = p_over_q("120*k^2 + 151*k + 47", "512*k^4 + 1024*k^3 + 712*k^2 + 194*k + 15", n_comparisons, 10/16)
-    p = "{A}*k^2 + {B}*k + {C}"
-    q = "{D}*k^5 + {E}*k^4 + {F}*k^3 + {G}*k^2 + {H}*k^1 + {I}" 
+    scaled_bbp_vals = p_over_q("120*x^2 + 151*x + 47", "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15", n_comparisons, 10/16)
+    p = "{A}*x^2 + {B}*x + {C}"
+    q = "{D}*x^5 + {E}*x^4 + {F}*x^3 + {G}*x^2 + {H}*x^1 + {I}" 
     #### Initial conditions #####
     a = 22
     b = 151
@@ -133,28 +142,144 @@ def brute_rational_search(n_runs, delta, n_comparisons):
         run += 1
 
 '''
-Let's try to instead use gradient descent.
+Let's try to instead use scipy gradient descent.
 '''
 
-def p_over_q(x, c_1, c_2, c_3, b_1, b_2, b_3, b_4, b_5, b_6):
+def p_over_q_expr(num_deg, den_deg, params, nopars = False):
     '''
-    p(x) = c_1x^2 + c_2x + c_3
-    q(x) = b_1x^5 + b_2x^4 + b_3x^3 + b_4x^2 + b_5x + b_6
-    '''
-    return (c_1*x**2 + c_2*x + c_3)/(b_1*x**5 + b_2*x**4 + b_3*x**3 + b_4*x**2 + b_5*x + b_6)
+    If num_deg (numerator degree) = n,
+       den_deg (denominator degree) = m,
+    so that 
+        params = [c_n, c_{n-1}, ... , c_0, b_m, b_{m-1}, ..., b_0].
+    then our polynomials  are
+        p(x) = c_nx^n + c_{n-1}^{n-1} + ... + c_0
+        q(x) = b_mx^m + b_{m-1}^{m-1} + ... + b_0.
+    The function creates string expressions of p(x) and q(x). 
 
-def approx_BBP_rational(n_terms):
+    num_deg : degree of numerator 
+    den_deg : ""
+    params  : list containing our coefficients. See above for ordering;  we 
+              basically read from left to right, starting from top to bottom.
+    no pars : set True if we want to eliminate parenthesis (e.g., for readibility). 
+    '''
+    assert num_deg + den_deg == len(params)-2,  "Coefficient-degree mismatch"
+    p_coeffs = params[0:num_deg+1]
+    q_coeffs = params[1+ num_deg:]
+
+    p_expr = str(p_coeffs[-1]) # We first add the constant terms.
+    p_coeffs.pop(-1) # Drop it, so that we don't have to tip-toe around it or accidentally add it later.
+    q_expr = str(q_coeffs[-1])
+    q_coeffs.pop(-1)
+
+    for i, coeff in reversed(list(enumerate(p_coeffs))):
+        p_expr =  "(" + str(coeff) + ")" \
+            + "*x^(" + str(num_deg - i) + ") + "\
+            + p_expr
+    for i, coeff in reversed(list(enumerate(q_coeffs))):
+        q_expr =  "(" + str(coeff) + ")" \
+            + "*x^(" + str(den_deg - i) + ") + "\
+            +  q_expr
+    if nopars == True:
+        p_expr = p_expr.replace("(", "").replace(")","")
+        q_expr = q_expr.replace("(", "").replace(")","")
+    return p_expr, q_expr
+
+
+########## We need a global variable (see p_over_q_at_x). 
+degs = [0,0]
+#########################################################
+
+def p_over_q_at_x(x, *params):
+    '''
+    Helper for grad_descent_BBP_rational.
+    With x a real number, params containing the coefficients of our 
+    rational function p(x)/q(x), we evalute the function at x and return 
+    the value (See below for more detail).
+
+    The reason why I need degs to be global is because it cannot be an argument 
+    of this function. Yet, at the same time, I need it to be! Thus I set it oustide 
+    and call it inside. It changes whenever I need to change it based on via 
+    the ``global`` python keyword.
+    '''
+
+    num_deg = degs[0]
+    den_deg = degs[1]
+    params = list(params)
+    '''
+    (More detail.)
+    If num_deg (numerator degree) = n,
+       den_deg (denominator degree) = m,
+    so that 
+        params = [c_n, c_{n-1}, ... , c_0, b_m, b_{m-1}, ..., b_0].
+    then our polynomials  are
+        p(x) = c_nx^n + c_{n-1}^{n-1} + ... + c_0
+        q(x) = b_mx^m + b_{m-1}^{m-1} + ... + b_0.
+    The function evaluates p(x)/q(x) at x.
+    '''
+    p_expr, q_expr = p_over_q_expr(num_deg, den_deg, params)
+    p_expr = p_expr.replace("^", "**")
+    q_expr = q_expr.replace("^", "**")
+    return eval(p_expr)/eval(q_expr)
+
+def grad_descent_BBP_rational(n_terms, num_deg, den_deg, guess, 
+                              func_to_fit_num = "120*x^2 + 151*x + 47", 
+                              func_to_fit_den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15"):
+    '''
+    Let n = num_deg, m = den_deg. This function attempts to model a rational 
+    function p(x)/q(x) with 
+        p(x) = c_nx^n + c_{n-1}^{n-1} + ... + c_0
+        q(x) = b_mx^m + b_{m-1}^{m-1} + ... + b_0.
+    to the BBP data.
+    
+    n_terms : number of pts from BBP data we attempt to model.
+    num_deg : the degree of the numerator polynomial we would like to fit. 
+    den_deg : the degree of the denominator...
+    guess   : our guess of what the coefficients should be (can just use a graph).
+    '''
+    #p0 = [22,151,150, 47,80,600,1000,800,200,100,15] a very good guess when n = 2, m = 5.
+    global degs 
+    degs = [num_deg, den_deg]
+    # set up x, y data
     k_indices = np.linspace(0, n_terms, n_terms+1)
-    scaled_bbp_vals = np.array(p_over_q_vals("120*k^2 + 151*k + 47", "512*k^4 + 1024*k^3 + 712*k^2 + 194*k + 15", n_terms, 10/16))
-    params, cov = curve_fit(p_over_q, k_indices, scaled_bbp_vals, p0=[22,151,47,80,600,1000,800,200,15], method = "lm")
-    params = {"A" : params[0], "B": params[1], "C": params[2], "D" : params[3], "E" : params[4], "F" : params[5], "G" : params[6], "H" : params[7], "I" : params[8]}
-    p = "{A}*k^2 + {B}*k + {C}"
-    q = "{D}*k^5 + {E}*k^4 + {F}*k^3 + {G}*k^2 + {H}*k^1 + {I}" 
-    numer_func = p.format(**params)
-    denom_func = q.format(**params)
-    print("Numerator:  ", numer_func.replace("*", "").replace("k","x")+"\n"\
-          "Denominator:", denom_func.replace("*", "").replace("k","x")+"\n")
- 
+    func_vals = np.array(p_over_q_vals(func_to_fit_num, func_to_fit_den, n_terms))
+
+    params, cov = curve_fit(p_over_q_at_x, k_indices, func_vals, p0=guess) # gradient descent
+    p, q = p_over_q_expr(num_deg, den_deg, list(params), nopars = True) # obtain the expr for the new approximation
+
+    approxed_vals = p_over_q_vals(p, q, n_terms)
+    error = list(map(lambda x,y : abs(x - y), func_vals, approxed_vals))
+    print("Numerator:  ", p.replace("*", "")+"\n"\
+          "Denominator:", q.replace("*", "")+"\n") # for readability
+    return sum(error)
+'''
+Sci_py gradient descent is very efficient, but lacks precision past ~12 decimal points. 
+It is difficult to control precision in python since python was not made to do so. It is also 
+difficult to control precision in numpy and it's kind of problematic at the moment (e.g., it 
+misleads the user on what its np.longdouble actually is). 
+'''
+
+def grad_descent_for_coeffs(n_comparisons): 
+    rows = []
+    bbp_vals = np.array(p_over_q_vals("120*k^2 + 151*k + 47", "512*k^4 + 1024*k^3 + 712*k^2 + 194*k + 15",n_comparisons, 10/16))
+
+    for k in range(0, n_comparisons):
+        nth_row = []
+        a_k = bbp_vals[k]
+        expr = ["({k})**2", "{k}", "1", "-{a_k}*({k})**5", "-{a_k}*({k})**4", "-{a_k}*({k})**3", "-{a_k}*({k})**2", "-{a_k}*({k})", "-{a_k}"]
+        for term in expr:
+            term = term.format(a_k = a_k, k = k)
+            nth_row.append(eval(term))  
+        rows.append(nth_row)
+    A = np.array(rows)
+    B = np.zeros(n_comparisons)
+    print(A.shape,B.shape)
+    return A,B, bbp_vals
+    # return A,B, np.linalg.solve(A,B)
+
+
+# By testing, the summands cannot by of the form
+# p(x) = c_1x^2 + c_2x + c_3
+# q(x) = b_1x^6 + b_2x^5 + b_3x^4 + b_4x^3 + b_5x^2 + b_6x + b_7
 
 # Pretty close rational functions:
 # 1)  6.900000000000155x^2 + 164.29999999999924x + 47.0 
@@ -178,28 +303,6 @@ def approx_BBP_rational(n_terms):
 #     89.60799999999468x^5 + 600.7760000000665x^4 + 1000.7760000000665x^3 + 792.0560000000868x^2 + 200.79200000001663x + 14.999999999998854
 #10)  3.35000000000007x^2 + 167.95000000000616x + 47.09999999999776
 #     96.74999999999905x^5 + 600.7499999999717x^4 + 995.2499999999704x^3 + 800.8499999999717x^2 + 190.55000000000766x^1 + 15.000000000000774  
-
-
-def full_rational_search(): 
-    '''
-    Idiotic level of brute force; but may need later.
-    '''
-    p = "{A}*k^2 + 151*k + 47"
-    q = "{C}*k^4 + {D}*k^3 + 712*k^2 + 194*k + 15" 
-    c = 10/16
-    for a in range(0, 1000):
-        print("I'm ", a/10, " percent done!")
-        for b in range(0, 1000):
-            print("I'm b! ", b)
-            for c in range(0, 1000):
-                # print("I'm c!", c)
-                numer_func = p.format(A = a, C = b, D = c)
-                denom_func = q.format(A = a, C = b, D = c)
-                vals = p_over_q(numer_func, denom_func, 50, c)
-                for i, val in enumerate(vals):
-                    matches = 0
-                    if abs(scaled_bbp_vals[i] - val) < 1e-5:
-                        matches+=1
-                if matches > 10:
-                    print(a,b,c)
-                
+# Insanely close:
+#11) 0.7912612958548907x^2 + -33.37646326882975x + 358.73514782417425
+#    3.381859148699356x^6 + -10.207350235822211x^5 + 224.43086733262686x^4 + 393.2003226706365x^3 + 2270.931165159218x^2 + 1035.7249781717808x + 114.48994079522934

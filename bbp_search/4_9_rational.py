@@ -46,7 +46,7 @@ def p_over_q_expr(num_deg, den_deg, params, nopars = False):
               basically read from left to right, starting from top to bottom.
     no pars : set True if we want to eliminate parenthesis (e.g., for readibility). 
     '''
-    # params.insert(0, "120")
+    params.insert(0, "120")
     # params.insert(3, "512")
     assert num_deg + den_deg == len(params)-2,  "Coefficient-degree mismatch"
     p_coeffs = params[0:num_deg+1]
@@ -118,7 +118,7 @@ def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
     '''
     #p0 = [22,151,150, 47,80,600,1000,800,200,100,15] a very good guess when n = 2, m = 5.
     if guess is sentinel:
-        guess = [1]*(num_deg + den_deg + 2 - 0) # subtracted zero
+        guess = [1]*(num_deg + den_deg + 2 - 1) # subtracted zero
     global degs 
     degs = [num_deg, den_deg]
     # set up x, y data
@@ -155,7 +155,7 @@ def gradient_recursion(n_iters, num_deg, den_deg,
     num     : Numerator of function we want to fit 
     den     : ""
     '''
-    try_guess = [1]*(num_deg + den_deg + 2 - 0) # Subtracted zero
+    try_guess = [1]*(num_deg + den_deg + 2 - 1) # Subtracted zero
     iters = 100     # we first try to fit 1000 points 
     prev_error = 0  
     while iters < n_iters:
@@ -212,11 +212,3 @@ def search_4_9_deg(n_iters):
     p, q = p_over_q_expr(4, 9, list(try_guess), nopars = True) # obtain the expr for the new approximation
     return p.replace("*", ""), q.replace("*", ""), error
 
-def search_coeffs(terms, err, den, num):
-    L = []
-    for i in range(0, terms):
-        var = (i/den)*num
-        if abs(var - int(var)) < err:
-            print(var)
-            L.append(i)
-    return L

@@ -1,12 +1,14 @@
 import numpy as np
 import math
+from decimal import *
+getcontext().prec = 40
 from scipy.optimize import curve_fit
 '''
 We now focus on a particular form of a rational function of interest, and apply our techniques to refine 
 the parameters. 
 '''
 
-def p_over_q_vals(p, q, n_terms, coeff = 1, scale = 1):
+def p_over_q_vals(p, q, n_terms, coeff = 1, scale = 1, step = 1):
     '''
     Computes the individual terms of a series with rational function p(k)/q(k) with 
     coefficient coeff.
@@ -14,7 +16,7 @@ def p_over_q_vals(p, q, n_terms, coeff = 1, scale = 1):
     vals = []
     p = p.replace("^", "**") #** is annoying to write for exponentiation
     q = q.replace("^", "**")
-    for term in range(0, n_terms+1):
+    for term in list(np.arange(0, n_terms + step, step)):
         val_p = p.replace("x","(" +  str(term) + ")")
         val_q = q.replace("x","(" +  str(term) + ")")
         val = scale * ((coeff)**term) * (eval(val_p)/eval(val_q))
@@ -44,9 +46,8 @@ def p_over_q_expr(num_deg, den_deg, params, nopars = False):
               basically read from left to right, starting from top to bottom.
     no pars : set True if we want to eliminate parenthesis (e.g., for readibility). 
     '''
-    params.insert(5, "1")
-    # params.insert(len(params), "1")
-    len(params)
+    # params.insert(0, "120")
+    # params.insert(3, "512")
     assert num_deg + den_deg == len(params)-2,  "Coefficient-degree mismatch"
     p_coeffs = params[0:num_deg+1]
     q_coeffs = params[1+ num_deg:]
@@ -67,6 +68,7 @@ def p_over_q_expr(num_deg, den_deg, params, nopars = False):
     if nopars == True:
         p_expr = p_expr.replace("(", "").replace(")","")
         q_expr = q_expr.replace("(", "").replace(")","")
+    # print(p_expr, q_expr)
     return p_expr, q_expr
 
 
@@ -116,17 +118,17 @@ def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
     '''
     #p0 = [22,151,150, 47,80,600,1000,800,200,100,15] a very good guess when n = 2, m = 5.
     if guess is sentinel:
-        guess = [1]*(num_deg + den_deg + 2 - 1) # subtracted 1
+        guess = [1]*(num_deg + den_deg + 2 - 0) # subtracted zero
     global degs 
     degs = [num_deg, den_deg]
     # set up x, y data
-    k_indices = np.linspace(0, n_terms, n_terms+1)
-    func_vals = np.array(p_over_q_vals(func_to_fit_num, func_to_fit_den, n_terms))
-
+    k_indices = np.linspace(0, n_terms, 2*n_terms+1)
+    func_vals = np.array(p_over_q_vals(func_to_fit_num, func_to_fit_den, n_terms, step = 0.5))
+    # print(k_indices, func_vals)
     params, cov = curve_fit(p_over_q_at_x, k_indices, func_vals, p0=guess, maxfev=10000) # gradient descent
     p, q = p_over_q_expr(num_deg, den_deg, list(params), nopars = True) # obtain the expr for the new approximation
 
-    approxed_vals = p_over_q_vals(p, q, n_terms)
+    approxed_vals = p_over_q_vals(p, q, n_terms, step=0.5)
     error = list(map(lambda x,y : abs(x - y), func_vals, approxed_vals))
     total_error = sum(error)
     print("For func :  ", func_to_fit_num + "\n",
@@ -139,7 +141,8 @@ def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
         return p.replace("*", ""), q.replace("*", ""), total_error
 
 def gradient_recursion(n_iters, num_deg, den_deg,
-                       num = "(0.625)^(x)*(120*x^2 + 151*x + 47)", 
+                       num = "(120*x^2 + 151*x + 47)", 
+                    #    num = "(0.625)^(x)*(120*x^2 + 151*x + 47)", 
                        den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15"):
     '''
     Theoretically, we are trying to fit infinitely many values with a rational function. 
@@ -152,10 +155,9 @@ def gradient_recursion(n_iters, num_deg, den_deg,
     num     : Numerator of function we want to fit 
     den     : ""
     '''
-    try_guess = [1]*(num_deg + den_deg + 2-1) # Subtracted 1
+    try_guess = [1]*(num_deg + den_deg + 2 - 0) # Subtracted zero
     iters = 100     # we first try to fit 1000 points 
     prev_error = 0  
-
     while iters < n_iters:
         print("Iteration: ", iters) 
 
@@ -166,16 +168,13 @@ def gradient_recursion(n_iters, num_deg, den_deg,
                                             guess = try_guess,\
                                             output_params = True)
         try_guess = params
-        if iters < 2000: # We speed up the algorithm after 2000 points. What's key is fitting the first ~2000 points.
-            iters += 200   
-        else:
-            iters += 10000
+        iters += 100
     p, q = p_over_q_expr(num_deg, den_deg, list(try_guess), nopars = True) # obtain the expr for the new approximation
     return p.replace("*", ""), q.replace("*", ""), error
 
 def search_4_9_deg(n_iters):
-    try_guess = [1]*14 #Initial guess is just unital coefficients.
-    iters = 100         # we first try to fit 10 points 
+    try_guess = [1]*15 #Initial guess is just unital coefficients.
+    iters = 30         # we first try to fit 10 points 
     prev_error = 0  
     '''
     With x^8 coefficient set to 19/330.
@@ -213,3 +212,11 @@ def search_4_9_deg(n_iters):
     p, q = p_over_q_expr(4, 9, list(try_guess), nopars = True) # obtain the expr for the new approximation
     return p.replace("*", ""), q.replace("*", ""), error
 
+def search_coeffs(terms, err, den, num):
+    L = []
+    for i in range(0, terms):
+        var = (i/den)*num
+        if abs(var - int(var)) < err:
+            print(var)
+            L.append(i)
+    return L

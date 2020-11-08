@@ -17,58 +17,338 @@ Such interpolation is hard, and unforunately not much progess has
 been made on rational function interpolation since the 1900s. I can nevertheless build 
 a cheap one. 
 '''
+
+
 # For testing
 five_pi = 3.14159    
 ten_pi = 3.1415926535
 
-def series(terms, n_terms):
+
+def series(terms, start = 0, end = None):
     '''
-    sums the terms up to n_terms.
-    '''
-    sum = 0
-    for i in range(0, n_terms):
+    Let n = end
+        j = start.
+    This function computes the sum 
+         n
+        ----,
+        \  
+        /     a_j  =  a_j + a_{j+1} + ... + a_n.
+        ----`
+        i = j
+    where terms = [a_0, a_1, ..., a_m], m >= n. 
+
+    ___________parameters___________
+    terms : list of numbers
+    start : index to begin sum; 
+            **default value is zero**
+    end   : index to end the sum;
+            **default value is length of terms**
+    ''' 
+    if end is None: # If not specified, assign default value
+        end = len(terms)
+    
+    assert start < end, "start index needs to be less than end index"
+    
+    sum = 0 # begin the sum 
+    for term in range(start, end + 1): # + 1 to make sure end is included
         sum += terms[i]
     return sum
 
-def p_over_q_vals(p, q, n_terms, coeff = 1, scale = 1, include_zero = True):
+def p_over_q_vals(p, q, terms, 
+                  start =  0,
+                  end   =  None, 
+                  coeff = 1, 
+                  scale = 1,):
     '''
-    Computes the individual terms of a series with rational function p(k)/q(k) with 
-    coefficient coeff.
+    Let p, q be functions. Let c be a constant. 
+    Then p_over_q_vals computes the sum 
+          n
+        -----,
+        \      
+         \          p(x)           p(0)           p(1)                 p(n)
+         /   (c)^x ------ = (c)^0 ------ + (c)^1 ------ + ... + (c)^n ------
+        /           q(x)           q(0)           q(1)                 q(n)
+        -----`  
+        x = 0
+    In our case, these functions will be polynomials, but they don't have to be. 
+
+    ___________parameters___________
+    p     : numerator function   Ex: 10*x^8 + 13*x^2 + 3
+    q     : denominator function 
+    coeff : constant c (see equation)
+            **Default value is 1**
+    scale : scalar to scale the sum
+            **Default value is 1**
     '''
-    vals = []
-    p = p.replace("^", "**") #** is annoying to write for exponentiation
+    if end is None: # If not specified, assign default value
+        end = len(terms)
+    
+    assert start < end, "start index needs to be less than end index"
+
+
+    vals = []  # where we store the values of the series 
+    p = p.replace("^", "**") #** We let the user write ^ instead of ** because ** is annoying
     q = q.replace("^", "**")
-    start = 0
 
-    if not include_zero:
-        start = 1
-
-    for term in range(start, n_terms+1):
+    for term in range(start, end +1):# + 1 to make sure end is included
         val_p = p.replace("x","(" +  str(term) + ")")
         val_q = q.replace("x","(" +  str(term) + ")")
         val = scale * ((coeff)**term) * (eval(val_p)/eval(val_q))
         vals.append(val)
     return vals
 
-def bbp_rationals():
+def poly_str_expr(deg, coeffs, nopars = False):
     '''
-    We compute the terms of the series given by the rationals in the BBP formula for pi.
+    Creates readble polynomial expressions. 
+    Ex:
+        >>> poly_str_expr(4, [1, 2, 3, 4, 5], nopars = True)
+        "1*x^4 + 2*x^3 + 3*x^2 + 4*x^1 + 5"
+
+    ___________parameters___________
+    deg    : degree of output polynomial 
+    coeffs : (From left to right) list of coefficients of the polynomial 
+    nopars : Boolean, set True to remove parentheses (for readability)
+             **Default value is False (for computations)** 
     '''
-    rationals = []
-    numer_val = p_over_q_vals("120*x^2 + 151*x + 47", "1", 50, 5)
-    denom_val = p_over_q_vals("512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15", "1", 50, 1)
-    for i in range(0, len(numer_val)):
-        rationals += [(numer_val[i], denom_val[i])]
-    return rationals
+    assert deg == len(coeffs) - 1, "Coefficient-degree mismatch"
+
+    expr = str(coeffs[-1]) # We first add the constant terms.
+    coeffs.pop(-1)         # Drop it, so that we don't have to tip-toe around it.
+
+    for i, coeff in reversed(list(enumerate(coeffs))):
+        expr =  "(" + str(coeff) + ")" \
+            + "*x^(" + str(deg - i) + ") + "\
+            + expr
+    if nopars == True:
+        expr = expr.replace("(", "").replace(")","")
+    return expr
+
+def p_over_q_expr(num_deg, den_deg, params, nopars = False):
+    '''
+    Creates readable rational function expressions.
+    Let 
+        num_deg = n,
+        den_deg = m,    
+        params = [c_n, c_{n-1}, ... , c_0, b_m, b_{m-1}, ..., b_0].
+    Then this function creates string expression for the polynomials
+        p(x) = c_nx^n + c_{n-1}^{n-1} + ... + c_0
+        q(x) = b_mx^m + b_{m-1}^{m-1} + ... + b_0.
+    
+    ___________parameters___________
+    num_deg : degree of numerator 
+    den_deg : degree of denominator
+    params  : list containing our coefficients. See above for ordering.
+    no pars : set True if we want to eliminate parenthesis
+              **Default value is False**
+    '''
+    assert num_deg + den_deg == len(params)-2,  "Coefficient-degree mismatch"
+    p_coeffs = params[0:num_deg+1]
+    q_coeffs = params[1+ num_deg:]
+
+    p_expr = poly_str_expr(num_deg, p_coeffs, nopars)
+    q_expr = poly_str_expr(den_deg, q_coeffs, nopars)
+    return p_expr, q_expr
 
 
-def rational_series(p,q, n_terms, coeff = 1):
-    '''
-    To compute the total sum with terms (coeff)^k*p(k)/q(k)
-    '''
-    series_vals = p_over_q_vals(p, q, n_terms, coeff)
-    return series(series_vals, n_terms)
+############ We need a global variable (see p_over_q_at_x). 
+degs = [0,0]
+############
 
+def p_over_q_at_x(x, *params):
+    '''
+    Helper for grad_descent_BBP_rational.
+    Let x be a real number. 
+        p(x) = c_nx^n + c_{n-1}^{n-1} + ... + c_0
+        q(x) = b_mx^m + b_{m-1}^{m-1} + ... + b_0.
+    This function simply evaluates 
+        p(x)
+        ----
+        q(x)
+    at x. 
+    ___________parameters___________
+    x      : the value we wish to evaluate our rational polynomial with 
+    params : the coefficents (comma separated).
+    '''
+    num_deg = degs[0] # we access our global variable 
+    den_deg = degs[1]
+    params = list(params) # we place our coefficients  in a list before passing it off
+    p_expr, q_expr = p_over_q_expr(num_deg, den_deg, params)
+
+    p_expr = p_expr.replace("^", "**") # clean up for calculation
+    q_expr = q_expr.replace("^", "**")
+    return eval(p_expr)/eval(q_expr)   # evaluate and return 
+
+def grad_descent_BBP_rational(num_deg, den_deg,
+                              func_to_fit_num = "(0.625)^(x)*(120*x^2 + 151*x + 47)", 
+                              func_to_fit_den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15",
+                              num_pts = None,
+                              x_data = None,
+                              guess = None, 
+                              output_params = False):
+    '''
+    Let n = num_deg, 
+        m = den_deg. 
+        func_to_fit_num = f(x)
+        func_to_fit_den = g(x).
+    This function attempts to find parameters such that the function 
+           c_nx^n + c_{n-1}^{n-1} + ... + c_0
+        ------------------------------------------
+           b_mx^m + b_{m-1}^{m-1} + ... + b_0.
+    models f(x)/g(x) on x_data as closely as posisble. 
+
+    ___________parameters___________
+    num_deg : the degree of the numerator polynomial we would like to fit. 
+    den_deg : the degree of the denominator...
+    func_to_fit_num : numerator of function we want to model 
+                      **By default, this is the BBP numerator**
+    func_to_fit_den : denominator of function we want to fit
+                      **By default, this is the BBP denominator** 
+    x_data : The exact x_data points we want to compare 
+             **By default, x_data = [0, 1, 2, ... , n_terms]**
+    nunm_pts      : If x_data is default, we specify the number of integers we want to compare 
+                    **No default value; should only be set when x_data is not set**
+    guess         : our guess of what the coefficients should be (can just use a graph)
+                    **By default, guess = [1, 1, ..., 1] (we add the appropriate number of ones)**
+    output_params : True if want a list of the approximated coefficients
+                    **By default, this is False (it's an unreadable mess 
+                    but can be set to True to pass to other functions)**
+    '''
+    if guess is None:  # Check if guess was overwritten
+        guess = [1]*(num_deg + den_deg + 2)
+    if x_data is None: # Check if x_data was overwritten
+        x_data = x_data = np.linspace(0, n_terms, n_terms+1, dtype=np.longdouble)
+    # We change the global parameter
+    global degs 
+    degs = [num_deg, den_deg]
+    
+    # Obtain our function valuesthat we will try to fit
+    func_vals = np.array(p_over_q_vals(func_to_fit_num, func_to_fit_den, n_terms), dtype=np.longdouble)
+    
+    # We now calculate our parameters to try to fit. Obtain polynomial expressions.
+    params, cov = curve_fit(p_over_q_at_x, x_data, func_vals, p0=guess, maxfev=5000) 
+    p, q = p_over_q_expr(num_deg, den_deg, list(params), nopars = True) 
+
+    # Calculate their values on the x_data. We also calculate the error.
+    approxed_vals = p_over_q_vals(p, q, n_terms)
+    error = list(map(lambda x,y : abs(x - y), func_vals, approxed_vals))
+    total_error = sum(error)
+
+    #We print the data for the user.
+    print("For func :  ", func_to_fit_num + "\n",
+          "Numerator:  ", p.replace("*", "")+"\n"\
+          "Denominator:", q.replace("*", "")+"\n"\
+          "Error:      ", total_error, "\n") # for readability
+    if output_params:
+        return params, total_error
+    else:
+        return p.replace("*", ""), q.replace("*", ""), total_error
+
+
+def gradient_recursion(n_iters, num_deg, den_deg, init_fit, 
+                       step = 100
+                       num = "(0.625)^(x)*(120*x^2 + 151*x + 47)", 
+                       den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15",
+                       zero = True):
+    '''
+    Theoretically, we are trying to fit infinitely many values with a rational function. 
+    Thus to do this, we first fit the first 100 values, then use the estimated parameters as a guess 
+    for a fit of 1000 values, then use those estimated parameters for the next fit, and so on
+
+    n_iters  : The number of values of points from the data that we would like to fit 
+    num_deg  : Degree of numerator we think will fit 
+    den_deg  : ""
+    num      : Numerator of function we want to fit 
+    den      : ""
+    init_fit : The number of points we will try to fit in our first step of the algorithm.
+    step     : The number of points to add to the next approximation in each loop
+    '''
+    # Initial conditions
+    try_guess = [1]*(num_deg + den_deg + 2) # Initial guess (just ones)
+    iters = init_fit                        # Initial # of points to fit
+    prev_error = 0                          # Initial error
+
+    # Algorithm loop
+    while iters < n_iters:
+        print("Iteration: ", iters) 
+        '''
+        Idea:
+        We use the previously-fitted coefficients for our next fit and repeat 
+        while we gradually increase the number of points of the function 
+        that we are trying to model. So, our parameters get more and more 
+        accurate through each iteration. 
+        '''
+        params, error = grad_descent_BBP_rational(iters,\
+                                            num_deg, den_deg,\
+                                            func_to_fit_num = num,\
+                                            func_to_fit_den = den,\
+                                            guess = try_guess,\
+                                            output_params = True,\
+                                            include_zero = zero)
+        try_guess = params
+        iters += step
+    # We're finished looping, so obtain the polynomials for our super accurate approximation
+    p, q = p_over_q_expr(num_deg, den_deg, list(try_guess), nopars = True) 
+    return p.replace("*", ""), q.replace("*", ""), error
+
+def search_and_compare():
+    '''
+    In all of our previous functions, we assumed the user knew the numerator and
+    denominator degree of the rational function that best fits their data. 
+    That isn't always the case. 
+
+    This loops through all possible rational function degree combinations for the numerator and
+    denominator. One by one, it prints to the user the error of each approximation. 
+    It also collects the best approximations in best_approxs. 
+    '''
+
+    exp_fits = []
+    bbp_fits = []
+    best_approxs = []
+
+    for num_deg in range(1, 9):
+        for den_deg in range(2, 12):
+            print(num_deg, den_deg)
+            try:
+                p, q, error = gradient_recursion(100000, num_deg, den_deg,\
+                                                        func_to_fit_num = "(0.625)^x", \
+                                                        func_to_fit_den = "1",
+                                                        include_zero = zero)
+                data = [p, q, error]
+                if error < 1e-7:
+                    best_approxs.append(data)
+                exp_fits.append(data)
+            except:
+                pass
+            try:
+                p, q, error = gradient_recursion(100000, num_deg, den_deg, include_zero = zero)
+                data = [p, q, error]
+                if error < 1e-7:
+                    best_approxs.append(data)
+                bbp_fits.append(data)
+            except: 
+                pass
+    return exp_fits, bbp_fits, best_approxs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+############ For later 
 def brute_rational_search(n_runs, delta, n_comparisons):
     '''
     This is inefficient gradient descent, minimizing sum of errors. 
@@ -145,243 +425,3 @@ def brute_rational_search(n_runs, delta, n_comparisons):
                   "Total error:", sum(prev_diffs))
             return prev_diffs
         run += 1
-
-'''
-Let's try to instead use scipy gradient descent.
-'''
-
-def p_over_q_expr(num_deg, den_deg, params, nopars = False):
-    '''
-    If num_deg (numerator degree) = n,
-       den_deg (denominator degree) = m,
-    so that 
-        params = [c_n, c_{n-1}, ... , c_0, b_m, b_{m-1}, ..., b_0].
-    then our polynomials  are
-        p(x) = c_nx^n + c_{n-1}^{n-1} + ... + c_0
-        q(x) = b_mx^m + b_{m-1}^{m-1} + ... + b_0.
-    The function creates string expressions of p(x) and q(x). 
-
-    num_deg : degree of numerator 
-    den_deg : ""
-    params  : list containing our coefficients. See above for ordering;  we 
-              basically read from left to right, starting from top to bottom.
-    no pars : set True if we want to eliminate parenthesis (e.g., for readibility). 
-    '''
-    assert num_deg + den_deg == len(params)-2,  "Coefficient-degree mismatch"
-    p_coeffs = params[0:num_deg+1]
-    q_coeffs = params[1+ num_deg:]
-
-    p_expr = str(p_coeffs[-1]) # We first add the constant terms.
-    p_coeffs.pop(-1) # Drop it, so that we don't have to tip-toe around it or accidentally add it later.
-    q_expr = str(q_coeffs[-1])
-    q_coeffs.pop(-1)
-
-    for i, coeff in reversed(list(enumerate(p_coeffs))):
-        p_expr =  "(" + str(coeff) + ")" \
-            + "*x^(" + str(num_deg - i) + ") + "\
-            + p_expr
-    for i, coeff in reversed(list(enumerate(q_coeffs))):
-        q_expr =  "(" + str(coeff) + ")" \
-            + "*x^(" + str(den_deg - i) + ") + "\
-            +  q_expr
-    if nopars == True:
-        p_expr = p_expr.replace("(", "").replace(")","")
-        q_expr = q_expr.replace("(", "").replace(")","")
-    return p_expr, q_expr
-
-
-########## We need a global variable (see p_over_q_at_x). 
-degs = [0,0]
-#########################################################
-
-def p_over_q_at_x(x, *params):
-    '''
-    Helper for grad_descent_BBP_rational.
-    With x a real number, params containing the coefficients of our 
-    rational function p(x)/q(x), we evalute the function at x and return 
-    the value (See below for more detail).
-
-    The reason why I need degs to be global is because it cannot be an argument 
-    of this function. Yet, at the same time, I need it to be! Thus I set it oustide 
-    and call it inside. It changes whenever I need to change it based on via 
-    the ``global`` python keyword.
-    '''
-
-    num_deg = degs[0]
-    den_deg = degs[1]
-    params = list(params)
-    '''
-    (More detail.)
-    If num_deg (numerator degree) = n,
-       den_deg (denominator degree) = m,
-    so that 
-        params = [c_n, c_{n-1}, ... , c_0, b_m, b_{m-1}, ..., b_0].
-    then our polynomials  are
-        p(x) = c_nx^n + c_{n-1}^{n-1} + ... + c_0
-        q(x) = b_mx^m + b_{m-1}^{m-1} + ... + b_0.
-    The function evaluates p(x)/q(x) at x.
-    '''
-    p_expr, q_expr = p_over_q_expr(num_deg, den_deg, params)
-    p_expr = p_expr.replace("^", "**")
-    q_expr = q_expr.replace("^", "**")
-    return eval(p_expr)/eval(q_expr)
-
-sentinel = object() # dummy object
-def grad_descent_BBP_rational(n_terms, num_deg, den_deg,
-                              func_to_fit_num = "(0.625)^(x)*(120*x^2 + 151*x + 47)", 
-                              func_to_fit_den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15",
-                              guess = sentinel,
-                              output_params = False,
-                              include_zero = True):
-    '''
-    Let n = num_deg, m = den_deg. This function attempts to model a rational 
-    function p(x)/q(x) with 
-        p(x) = c_nx^n + c_{n-1}^{n-1} + ... + c_0
-        q(x) = b_mx^m + b_{m-1}^{m-1} + ... + b_0.
-    to the BBP data.
-    
-    n_terms : number of pts from BBP data we attempt to model.
-    num_deg : the degree of the numerator polynomial we would like to fit. 
-    den_deg : the degree of the denominator...
-    guess   : our guess of what the coefficients should be (can just use a graph).
-    '''
-    #p0 = [22,151,150, 47,80,600,1000,800,200,100,15] a very good guess when n = 2, m = 5.
-    if guess is sentinel:
-        guess = [1]*(num_deg + den_deg + 2)
-    global degs 
-    degs = [num_deg, den_deg]
-    
-    start = 0
-    if not include_zero:
-        start = 1
-
-    # set up x, y data
-    k_indices = np.linspace(start, n_terms, n_terms+1)
-    func_vals = np.array(p_over_q_vals(func_to_fit_num, func_to_fit_den, n_terms, include_zero))
-
-    params, cov = curve_fit(p_over_q_at_x, k_indices, func_vals, p0=guess, maxfev=5000) # gradient descent
-    p, q = p_over_q_expr(num_deg, den_deg, list(params), nopars = True) # obtain the expr for the new approximation
-
-    approxed_vals = p_over_q_vals(p, q, n_terms)
-    error = list(map(lambda x,y : abs(x - y), func_vals, approxed_vals))
-    total_error = sum(error)
-    print("For func :  ", func_to_fit_num + "\n",
-          "Numerator:  ", p.replace("*", "")+"\n"\
-          "Denominator:", q.replace("*", "")+"\n"\
-          "Error:      ", total_error, "\n") # for readability
-    if output_params:
-        return params, total_error
-    else:
-        return p.replace("*", ""), q.replace("*", ""), total_error
-
-def search_and_compare(zero = True):
-    exp_fits = []
-    bbp_fits = []
-    best_approxs = []
-
-    for num_deg in range(1, 9):
-        for den_deg in range(2, 12):
-            print(num_deg, den_deg)
-            try:
-                p, q, error = gradient_recursion(100000, num_deg, den_deg,\
-                                                        func_to_fit_num = "(0.625)^x", \
-                                                        func_to_fit_den = "1",
-                                                        include_zero = zero)
-                data = [p, q, error]
-                if error < 1e-7:
-                    best_approxs.append(data)
-                exp_fits.append(data)
-            except:
-                pass
-            try:
-                p, q, error = gradient_recursion(100000, num_deg, den_deg, include_zero = zero)
-                data = [p, q, error]
-                if error < 1e-7:
-                    best_approxs.append(data)
-                bbp_fits.append(data)
-            except: 
-                pass
-    return exp_fits, bbp_fits, best_approxs
-
-# '5367124765888.0x^4 + -530171538689464.0x^3 + 1.7412531032379454e+16x^2 + -1.924913929564134e+17x^1 + 8871917683451926.0
-# -13176492198746.0x^9 + 229588042882762.0x^8 + -4126924029947049.0x^7 + 18717880079013420x^6 + -184346450804085088x^5 + 663253966578081.0x^4 + -1637793963428539904x^3 + -26477463167523488x^2 + -230866126471856896x^1 + 2831463090463394.0
-
-# p = [10734249531776, -1060343077378928, 34825062064758908, -384982785912826816, 17743835366903852]
-# q = [-26352984397492, 459176085765524, -8253848059894098, 37435760158026840, -368692901608170176, 1326507933156162, -3275587926857079808, -52954926335046976, -461732252943713792, 5662926180926788]
-# "0.0010734249531776873*x^4 + -0.10603430773789276*x^3 + 3.482506206475891*x^2 + -38.498278591282684*x^1 + 1.7743835366903853"
-# "-0.002635298439749254*x^9 + 0.04591760857655244*x^8 + -0.8253848059894098*x^7 + 3.743576015802684*x^6 + -36.869290160817016*x^5 + 0.13265079331561627*x^4 + -327.558792685708*x^3 + -5.295492633504698*x^2 + -46.17322529437138*x^1 + 0.5662926180926788"
-# "0.0012544894281814108*x^5 + -0.1180229478194571*x^4 + 3.7208845645745106*x^3 + -39.617001666980315*x^2 + -1.7661414102809467*x^1 + 1.6540985067121214"
-# "-0.0021822819261304856*x^10 + 0.032424363138435705*x^9 + -0.624593501436639*x^8 + 2.01486859075354*x^7 + -28.267048159977428*x^6 + -32.6610635031047*x^5 + -279.16296146201023*x^4 + -101.22005231035284*x^3 + 1.2780562045517494*x^2 + -8.501259828766722*x^1 + 0.527903778737912"
-'''
-Here's an idea. What if we fit the function for the first ~50 BBP or (10/16)^x points, then 
-use those coeffs for fitting ~100, and so on? 
-'''
-
-def gradient_recursion(n_iters, num_deg, den_deg, 
-                       num = "(0.625)^(x)*(120*x^2 + 151*x + 47)", 
-                       den = "512*x^4 + 1024*x^3 + 712*x^2 + 194*x + 15",
-                       zero = True):
-    '''
-    Theoretically, we are trying to fit infinitely many values with a rational function. 
-    Thus to do this, we first fit the first 100 values, then use the estimated parameters as a guess 
-    for a fit of 1000 values, then use those estimated parameters for the next fit, and so on
-
-    n_iters : The number of values of points from the data that we would like to fit 
-    num_deg : Degree of numerator we think will fit 
-    den_deg : ""
-    num     : Numerator of function we want to fit 
-    den     : ""
-    '''
-    try_guess = [1]*(num_deg + den_deg + 2) #Initial guess is just unital coefficients.
-    iters = 100     # we first try to fit 1000 points 
-    prev_error = 0  
-
-    while iters < n_iters:
-        print("Iteration: ", iters) 
-
-        params, error = grad_descent_BBP_rational(iters,\
-                                            num_deg, den_deg,\
-                                            func_to_fit_num = num,\
-                                            func_to_fit_den = den,\
-                                            guess = try_guess,\
-                                            output_params = True,\
-                                            include_zero = zero)
-        try_guess = params
-        # if iters < 2000: # We speed up the algorithm after 2000 points. What's key is fitting the first ~2000 points.
-        #     iters += 200   
-        # else:
-        iters += 1000
-    p, q = p_over_q_expr(num_deg, den_deg, list(try_guess), nopars = True) # obtain the expr for the new approximation
-    return p.replace("*", ""), q.replace("*", ""), error
-
-
-def search_4_9_deg(n_iters, zero = True):
-    try_guess = [1]*15 #Initial guess is just unital coefficients.
-    iters = 30     # we first try to fit 10 points 
-    prev_error = 0  
-
-    while iters < n_iters:
-        print("Iteration: ", iters) 
-
-        params, error = grad_descent_BBP_rational(iters,\
-                                            4, 9,\
-                                            guess = try_guess,\
-                                            output_params = True,\
-                                            include_zero = zero)
-        try_guess = params
-        # if iters < 2000: # We speed up the algorithm after 2000 points. What's key is fitting the first ~2000 points.
-        #     iters += 200   
-        # else:
-        iters += 1
-    p, q = p_over_q_expr(4, 9, list(try_guess), nopars = True) # obtain the expr for the new approximation
-    return p.replace("*", ""), q.replace("*", ""), error
-
-'''
-One rational coefficient added. Really close.
-0.002088103573295135x^4 + -0.19693393435842774x^3 + 6.227707849860024x^2 + -66.67802845830462x^1 + 1.3634440638318717
--0.003740047168735935x^9 + (19/330)x^8 + -1.1041913927630413x^7 + 3.997743832035262x^6 + -51.20630985282166x^5 + -36.596365759369604x^4 + -505.65703864655563x^3 + -79.56019286930426x^2 + -63.21893419152972x^1 + 0.43514172249952515
-
-Now we add another. 
-0.002088103573295135x^4 + -0.19693393435842774x^3 + 6.227707849860024x^2 + -(200/3)x^1 + 1.3634440638318717
--0.003740047168735935x^9 + (19/330)x^8 + -1.1041913927630413x^7 + 3.997743832035262x^6 + -51.20630985282166x^5 + -36.596365759369604x^4 + -505.65703864655563x^3 + -79.56019286930426x^2 + -63.21893419152972x^1 + 0.43514172249952515
-'''

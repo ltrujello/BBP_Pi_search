@@ -1,8 +1,12 @@
 import numpy as np
 import math
+from numpy.linalg import matrix_rank
 from scipy.optimize import curve_fit
+from scipy.linalg import null_space
+from polynomials_and_series import series, p_over_q_vals
+
 from decimal import *
-getcontext().prec = 40
+getcontext().prec = 80
 '''
 We look for a BBP base 10 series for pi. A desired formula is of the form 
 pi \sum_{k = 0}(1/10)^k * p(k)/q(k)
@@ -13,16 +17,9 @@ else, although they are a bit vague in their papers on this. Nevertheless, this
 aims to find such an expression for pi.
 
 Part of this problem boils down to interpolating data with rational functions. 
-Such interpolation is hard, and unforunately not much progess has 
-been made on rational function interpolation since the 1900s. I can nevertheless build 
-a cheap one. 
+A highly accurate algorithm for this can be found in the PhD thesis of Antonio Cosmin Ionita, 
+"Lagrange Rational Interpolation and its Applications to Approximation of Large-scale Dynamical Systems".
 '''
-
-
-# For testing
-five_pi = 3.14159    
-ten_pi = 3.1415926535
-
 
 def series(terms, start = 0, end = None):
     '''
@@ -50,7 +47,7 @@ def series(terms, start = 0, end = None):
     assert start < end, "start index needs to be less than end index"
     
     sum = 0 # begin the sum 
-    for term in range(start, end + 1): # + 1 to make sure end is included
+    for i in range(start, end): # + 1 to make sure end is included
         sum += terms[i]
     return sum
 
@@ -61,20 +58,20 @@ def p_over_q_vals(p, q, terms,
                   scale = 1,):
     '''
     Let p, q be functions. Let c be a constant. 
-    Then p_over_q_vals computes the sum 
-          n
-        -----,
-        \      
-         \          p(x)           p(0)           p(1)                 p(n)
-         /   (c)^x ------ = (c)^0 ------ + (c)^1 ------ + ... + (c)^n ------
-        /           q(x)           q(0)           q(1)                 q(n)
-        -----`  
+    Then p_over_q_vals computes the list 
+
+        ___                                               ___
+        |          p(0)          p(1)                 p(n)   |
+        |   (c)^0 ------  (c)^1 ------         (c)^n ------  |
+        |          q(0) ,        q(1)  , ... ,        q(n)   |
+        ___                                               ___
         x = 0
     In our case, these functions will be polynomials, but they don't have to be. 
 
     ___________parameters___________
     p     : numerator function   Ex: 10*x^8 + 13*x^2 + 3
     q     : denominator function 
+    terms : terms which need to be evaluated
     coeff : constant c (see equation)
             **Default value is 1**
     scale : scalar to scale the sum
@@ -378,6 +375,19 @@ def find_rational_coeffs(n_range, err, den, num):
             L.append(i)
     return L
 
+def localize_xdata(max, delta, num_local_pts):
+    assert num_local_pts % 2 == 0, "num_local_pts must be even"
+    assert num_local_pts*delta < 1, "delta is too large" 
+    x_data = [0]
+    for x in range(1, max + 1): # plus one to include max
+        x_coord_neigh = [x]
+        for i in range(1, num_local_pts+1):
+            x_coord_neigh.append(x - i*delta)
+            x_coord_neigh.append(x + i*delta)
+        x_coord_neigh.sort()
+        x_data += x_coord_neigh
+    return np.array(x_data, dtype = np.longdouble)
+
 def search_and_compare():
     '''
     In all of our previous functions, we assumed the user knew the numerator and
@@ -417,7 +427,7 @@ def search_and_compare():
     return exp_fits, bbp_fits, best_approxs
 
 
-
+        
 
 
 

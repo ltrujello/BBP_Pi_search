@@ -1,6 +1,6 @@
 # What is this
 This is an effort to understand the following function:
-<img src="https://github.com/ltrujello/Rational_Series/blob/main/main_equation.svg" height="100px" />
+<img src="https://github.com/ltrujello/Rational_Series/blob/master/main_equation.svg" height="100px" />
 
 (Obviously, sum has issues if the denominator is zero on any of the integers, or if there is no constant term. )
 For this function, I am interested in the case for b = 10. It seems that we cannot express certain real numbers 
